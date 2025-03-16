@@ -73,3 +73,56 @@ def delete_book(id):
     return jsonify({'message': 'Book deleted successfully'})
 
 # Borrowing Logic
+@app.route('/borrow', methods=['POST'])
+def borrow_book():
+    data = request.json
+    book_id, customer_id, borrow_date = data['bookid'], data['customerid'], data['borrowdate']
+    
+    # Check book availability
+    book_check = execute_read_query(con, f"SELECT status FROM books WHERE id={book_id}")
+    if not book_check or book_check[0]['status'] != 'available':
+        return jsonify({'error': 'Book is not available'}), 400
+    
+    # Check if customer already has a book borrowed
+    customer_check = execute_read_query(con, f"SELECT id FROM borrowingrecords WHERE customerid={customer_id} AND returndate IS NULL")
+    if customer_check:
+        return jsonify({'error': 'Customer already has a borrowed book'}), 400
+    
+    # Insert borrowing record
+    sql = f"INSERT INTO borrowingrecords (bookid, customerid, borrowdate) VALUES ({book_id}, {customer_id}, '{borrow_date}')"
+    execute_update_query(con, sql)
+    execute_update_query(con, f"UPDATE books SET status='unavailable' WHERE id={book_id}")
+    
+    return jsonify({'message': 'Book borrowed successfully'})
+
+@app.route('/return/<int:record_id>', methods=['PUT'])
+def return_book(record_id):
+    data = request.json
+    return_date = data['returndate']
+    
+    # Get borrowing record
+    record = execute_read_query(con, f"SELECT borrowdate, bookid FROM borrowingrecords WHERE id={record_id} AND returndate IS NULL")
+    if not record:
+        return jsonify({'error': 'Borrowing record not found or book already returned'}), 400
+    
+    borrow_date = datetime.strptime(record[0]['borrowdate'], '%Y-%m-%d')
+    return_date_obj = datetime.strptime(return_date, '%Y-%m-%d')
+    late_days = max(0, (return_date_obj - borrow_date - timedelta(days=10)).days)
+    late_fee = late_days * 1
+    
+    # Update borrowing record
+    sql = f"UPDATE borrowingrecords SET returndate='{return_date}', late_fee={late_fee} WHERE id={record_id}"
+    execute_update_query(con, sql)
+    execute_update_query(con, f"UPDATE books SET status='available' WHERE id={record[0]['bookid']}")
+    
+    return jsonify({'message': 'Book returned successfully', 'late_fee': late_fee})
+
+# View Borrowing Records
+@app.route('/borrowings', methods=['GET'])
+def get_borrowings():
+    sql = "SELECT * FROM borrowingrecords"
+    borrowings = execute_read_query(con, sql)
+    return jsonify(borrowings)
+
+if __name__ == '__main__':
+    app.run(debug=True)
