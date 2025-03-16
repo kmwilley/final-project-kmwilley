@@ -24,7 +24,7 @@ def execute_read_query(con, sql):
         rows = mycursor.fetchall()
         return rows
     except Error as e:
-        print("Erros is: ", e)
+        print("Errors is: ", e)
 
 # Execute query function to insert the rows into table
 def execute_update_query(con, sql):
@@ -35,4 +35,6 @@ def execute_update_query(con, sql):
         print("DB update successfull")
     except Error as e:
         print("Error is : ", e)
+
+        
         
